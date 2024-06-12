@@ -58,13 +58,16 @@ class Weeding(rosys.persistence.PersistentModule):
         self.with_punch_check: bool = False
         self.drill_with_open_tornado: bool = False
         self.drill_between_crops: bool = False
+        self.speed_tornado_punch: bool = False
         # dual mechanism
         self.with_drilling: bool = False
         self.with_chopping: bool = False
         self.chop_if_no_crops: bool = False
 
         # tool settings
+        self.punch_depth: float = 0.05
         self.tornado_angle: float = 30.0
+        self.tornado_turns: int = 1
         self.weed_screw_depth: float = 0.13
         self.crop_safety_distance: float = 0.01
 
@@ -489,6 +492,11 @@ class Weeding(rosys.persistence.PersistentModule):
                         if self.system.odometer.prediction.relative_point(self.current_segment.spline.end).x < 0.01:
                             self.row_segment_completed = True
                     await rosys.sleep(0.2)
+
+                # Lift z_axis before going to next segment
+                if self.speed_tornado_punch:
+                    await self.field_friend.z_axis.return_to_reference()
+
             if self.drive_backwards_to_start:
                 self.log.info('Low battery, driving backwards to start...')
                 rosys.notify('Low battery, driving backwards to start', 'warning')
@@ -650,7 +658,16 @@ class Weeding(rosys.persistence.PersistentModule):
                     if self.drill_with_open_tornado and not self._crops_in_drill_range(closest_crop_id, closest_crop_position, 0):
                         open_drill = True
                     await self.system.puncher.drive_and_punch(
-                        plant_id=closest_crop_id, x=closest_crop_position.x, y=closest_crop_position.y, angle=self.tornado_angle, with_open_tornado=open_drill, with_punch_check=self.with_punch_check)
+                        plant_id=closest_crop_id,
+                        x=closest_crop_position.x,
+                        y=closest_crop_position.y,
+                        depth=self.punch_depth,
+                        turns=self.tornado_turns,
+                        angle=self.tornado_angle,
+                        with_open_tornado=open_drill,
+                        with_punch_check=self.with_punch_check,
+                        return_depth = self.punch_depth if self.speed_tornado_punch else None
+                    )
                     # if self.drill_with_open_tornado and not self._crops_in_drill_range(closest_crop_id, closest_crop_position, 0):
                     #     self.log.info('drilling crop with open tornado')
                     #     await self.system.puncher.punch(plant_id=closest_crop_id, y=closest_crop_position.y, angle=0)

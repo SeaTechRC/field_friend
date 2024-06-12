@@ -9,6 +9,7 @@ from nicegui import events, ui
 from .key_controls import KeyControls
 from .leaflet_map import leaflet_map
 from .punch_dialog import PunchDialog
+from .set_knife_dialog import SetKnifeDialog
 
 if TYPE_CHECKING:
     from field_friend.system import System
@@ -119,6 +120,19 @@ class operation:
                                     .classes('w-24') \
                                     .bind_value(self.system.weeding, 'tornado_angle') \
                                     .tooltip('Set the angle for the tornado drill')
+                                ui.checkbox('Speedy tornado', value=False) \
+                                    .bind_value(self.system.weeding, 'speed_tornado_punch') \
+                                    .tooltip("Speed up punching by leaving the tornado in the ground during weeding.")
+                                ui.number('Tornado depth', format='%.0f', value=180, step=1, min=1, max=180) \
+                                    .props('dense outlined suffix=°') \
+                                    .classes('w-24') \
+                                    .bind_value(self.system.weeding, 'punch_depth') \
+                                    .tooltip('Set the depth for the tornado drill')
+                                ui.number('Tornado turns', format='%i', value=1, step=1, min=1, max=180) \
+                                    .props('dense outlined suffix=°') \
+                                    .classes('w-24') \
+                                    .bind_value(self.system.weeding, 'tornado_turns') \
+                                    .tooltip('Set the amount of turns for the tornado drill')
                             elif self.system.field_friend.tool in ['weed_screw', 'dual_mechanism']:
                                 ui.number('Drill depth', value=0.02, format='%.2f', step=0.01,
                                           min=self.system.field_friend.z_axis.max_position, max=self.system.field_friend.z_axis.min_position*-1) \
@@ -233,8 +247,10 @@ class operation:
                                 .bind_value(self.system.coin_collecting, 'with_drilling')
 
         self.system.puncher.POSSIBLE_PUNCH.register(self.can_punch)
+        self.system.puncher.SET_KNIFE_POSITION.register(self.set_knife_position)
         self.punch_dialog = PunchDialog(self.system.usb_camera_provider,
                                         self.system.plant_locator, self.system.odometer)
+        self.set_knife_dialog = SetKnifeDialog(self.field_friend)
 
     @ui.refreshable
     def show_start_row(self) -> None:
@@ -281,6 +297,9 @@ class operation:
             self.system.puncher.punch_allowed = 'allowed'
         elif result is None or result == 'No' or result == 'Cancel':
             self.system.puncher.punch_allowed = 'not_allowed'
+
+    async def set_knife_position(self):
+        await self.set_knife_dialog
 
     def handle_automation_changed(self, e: events.ValueChangeEventArguments) -> None:
         self.system.automator.default_automation = self.system.automations[e.value]

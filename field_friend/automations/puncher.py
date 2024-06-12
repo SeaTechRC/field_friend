@@ -17,14 +17,16 @@ class PuncherException(Exception):
 class Puncher:
     def __init__(self, field_friend: FieldFriend, driver: Driver, kpi_provider: KpiProvider) -> None:
         self.POSSIBLE_PUNCH = rosys.event.Event()
+        self.SET_KNIFE_POSITION = rosys.event.Event()
         '''Event that is emitted when a punch is possible.'''
         self.punch_allowed: str = 'waiting'
+        self.knife_position_set: str = 'waiting'
         self.field_friend = field_friend
         self.driver = driver
         self.kpi_provider = kpi_provider
         self.log = logging.getLogger('field_friend.puncher')
 
-    async def try_home(self) -> bool:
+    async def try_home(self, set_knife_position: bool = False) -> bool:
         if self.field_friend.y_axis is None or self.field_friend.z_axis is None:
             rosys.notify('no y or z axis', 'negative')
             return False
@@ -37,6 +39,11 @@ class Puncher:
             await rosys.sleep(0.2)
             if not await self.field_friend.y_axis.try_reference():
                 return False
+            if set_knife_position:
+                self.knife_position_set = 'waiting'
+                self.SET_KNIFE_POSITION.emit()
+                while self.knife_position_set == 'waiting':
+                    await rosys.sleep(0.1)
             return True
         except Exception as e:
             raise PuncherException('homing failed') from e
@@ -65,6 +72,7 @@ class Puncher:
                     plant_id: Optional[str] = None,
                     with_open_tornado: bool = False,
                     with_punch_check: bool = False,
+                    return_depth: Optional[float] = None
                     ) -> None:
         self.log.info(f'Punching at {y} with depth {depth}...')
         if self.field_friend.y_axis is None or self.field_friend.z_axis is None:
@@ -75,7 +83,7 @@ class Puncher:
             if not self.field_friend.y_axis.is_referenced or not self.field_friend.z_axis.is_referenced:
                 rosys.notify('axis are not referenced, homing!', type='info')
                 self.log.info('axis are not referenced, homing!')
-                success = await self.try_home()
+                success = await self.try_home(set_knife_position=not (return_depth is None))
                 if not success:
                     rosys.notify('homing failed!', type='negative')
                     self.log.error('homing failed!')
@@ -101,7 +109,7 @@ class Puncher:
                         self.log.warning('punch was not allowed')
                         return
                     self.log.info('punching was allowed')
-                await self.tornado_drill(angle=angle, turns=turns, with_open_drill=with_open_tornado)
+                await self.tornado_drill(angle=angle, turns=turns, with_open_drill=with_open_tornado, return_depth=return_depth)
 
             elif isinstance(self.field_friend.z_axis, ZAxis):
                 await self.field_friend.y_axis.move_to(y)
@@ -133,11 +141,12 @@ class Puncher:
                               y: float,
                               depth: float = 0.05,
                               angle: float = 180,
-                              turns: float = 2.0,
+                              turns: float = 1.0,
                               backwards_allowed: bool = True,
                               plant_id: Optional[str] = None,
                               with_open_tornado: bool = False,
                               with_punch_check: bool = False,
+                              return_depth: Optional[float] = None
                               ) -> None:
         if self.field_friend.y_axis is None or self.field_friend.z_axis is None:
             rosys.notify('no y or z axis', 'negative')
@@ -149,7 +158,7 @@ class Puncher:
                 return
             await self.drive_to_punch(x)
             await self.punch(y=y, depth=depth, angle=angle, turns=turns,
-                             plant_id=plant_id, with_open_tornado=with_open_tornado, with_punch_check=with_punch_check)
+                             plant_id=plant_id, with_open_tornado=with_open_tornado, with_punch_check=with_punch_check, return_depth=return_depth)
             # await self.clear_view()
         except Exception as e:
             raise PuncherException('drive and punch failed') from e
@@ -164,7 +173,8 @@ class Puncher:
         await self.field_friend.y_axis.stop()
         self.kpi_provider.increment_weeding_kpi('chops')
 
-    async def tornado_drill(self, angle: float = 180, turns: float = 2, with_open_drill=False) -> None:
+    async def tornado_drill(self, angle: float = 180, turns: float = 2, with_open_drill=False, 
+                    return_depth: Optional[float] = None) -> None:
         self.log.info(f'Drilling with tornado at {angle}...')
         if not isinstance(self.field_friend.z_axis, Tornado):
             raise PuncherException('tornado drill is only available for tornado axis')
@@ -176,12 +186,15 @@ class Puncher:
                     rosys.notify('homing failed!', type='negative')
                     raise PuncherException('homing failed')
                 await rosys.sleep(0.5)
-            await self.field_friend.z_axis.move_down_until_reference()
+            if return_depth is None:
+                await self.field_friend.z_axis.move_down_until_reference()
+            else:
+                await self.field_friend.z_axis.move_to(-return_depth)
 
             await self.field_friend.z_axis.turn_knifes_to(angle)
-            await rosys.sleep(2)
+            #await rosys.sleep(2)
             await self.field_friend.z_axis.turn_by(turns)
-            await rosys.sleep(2)
+            #await rosys.sleep(2)
 
             if with_open_drill:
                 self.log.info('Drilling again with open drill...')
@@ -190,7 +203,10 @@ class Puncher:
                 await self.field_friend.z_axis.turn_by(turns)
                 await rosys.sleep(2)
 
-            await self.field_friend.z_axis.return_to_reference()
+            if return_depth is None:
+                await self.field_friend.z_axis.return_to_reference()
+            else:
+                await self.field_friend.z_axis.move_to(-return_depth)
             await rosys.sleep(0.5)
             await self.field_friend.z_axis.turn_knifes_to(0)
             await rosys.sleep(0.5)
