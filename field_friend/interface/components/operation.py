@@ -250,7 +250,7 @@ class operation:
         self.system.puncher.SET_KNIFE_POSITION.register(self.set_knife_position)
         self.punch_dialog = PunchDialog(self.system.usb_camera_provider,
                                         self.system.plant_locator, self.system.odometer)
-        self.set_knife_dialog = SetKnifeDialog(self.field_friend)
+        self.set_knife_dialog = SetKnifeDialog(self.system.field_friend)
 
     @ui.refreshable
     def show_start_row(self) -> None:
