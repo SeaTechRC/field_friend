@@ -46,6 +46,8 @@ class Tornado(rosys.hardware.Module, abc.ABC):
     async def move_to(self, position: float) -> None:
         if not self.z_is_referenced:
             raise RuntimeError('zaxis is not referenced, reference first')
+        if 0 < position:
+            raise RuntimeError(f'zaxis depth it out of range, max: 0, given: {position}')
         if not self.min_position <= position:
             raise RuntimeError(f'zaxis depth is out of range, min: {self.min_position}, given: {position}')
 
@@ -150,6 +152,7 @@ class TornadoHardware(Tornado, rosys.hardware.ModuleHardware):
             bool {name}_is_referencing = false;
             bool {name}_end_top_enabled = true;
             bool {name}_end_bottom_enabled = true;
+            bool {name}_knife_safety = true;
             when {name}_end_top_enabled and {name}_is_referencing and {name}_end_top.level == 0 then
                 {name}_z.speed(0);
             end
@@ -211,7 +214,7 @@ class TornadoHardware(Tornado, rosys.hardware.ModuleHardware):
         while not position - 0.005 < self.position_z < position + 0.005:
             await rosys.sleep(0.1)
 
-    async def move_down_until_reference(self) -> None:
+    async def move_down_until_reference(self, offset: float = 0) -> None:
         try:
             await super().move_down_until_reference()
         except RuntimeError as e:
@@ -233,10 +236,14 @@ class TornadoHardware(Tornado, rosys.hardware.ModuleHardware):
                     break
                 self.log.info('moving z axis down')
                 await rosys.sleep(0.1)
+            
             if self.ref_knife_stop:
                 raise Exception('Error while moving z axis down: Ref knifes stop triggered')
             if not self.ref_knife_ground:
                 self.log.info('Ref ground triggered: Bottom ground reached')
+            
+            self.log.info('applying z axis offset')
+            await self.move_to(self.position_z + offset)
         except Exception as e:
             self.log.error(f'error while moving z axis down: {e}')
             self.is_referenced = False
@@ -419,6 +426,13 @@ class TornadoHardware(Tornado, rosys.hardware.ModuleHardware):
                 f'{self.name}_ref_motor_enabled = false;'
                 f'{self.name}_ref_gear_enabled = false;'
             )
+
+    async def set_knife_safety(self, enabled: bool = True):
+        if enabled:
+            await self.robot_brain.send(f'{self.name}_knife_safety = true;')
+        else:
+            await self.robot_brain.send(f'{self.name}_knife_safety = false;')
+        await rosys.sleep(0.5)
 
     def handle_core_output(self, time: float, words: list[str]) -> None:
         self.end_top = int(words.pop(0)) == 0

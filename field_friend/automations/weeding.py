@@ -427,6 +427,7 @@ class Weeding(rosys.persistence.PersistentModule):
             self.system.plant_locator.pause()
             self.system.automation_watcher.stop_field_watch()
             self.system.automation_watcher.gnss_watch_active = False
+            await self.system.field_friend.z_axis.set_knife_safety(True)
 
     async def _drive_to_start(self):
         self.log.info('Driving to start...')
@@ -474,6 +475,9 @@ class Weeding(rosys.persistence.PersistentModule):
                     await self._create_simulated_plants()
                 self.log.info(f'Driving row {i + 1}/{len(self.weeding_plan)} and segment {j + 1}/{len(path)}...')
                 self.row_segment_completed = False
+                # If we speed punch, disable knife safety
+                if self.speed_tornado_punch:
+                    self.system.field_friend.z_axis.set_knife_safety(False)
                 while not self.row_segment_completed:
                     self.log.info('while not row completed...')
                     await rosys.automation.parallelize(
@@ -496,6 +500,7 @@ class Weeding(rosys.persistence.PersistentModule):
                 # Lift z_axis before going to next segment
                 if self.speed_tornado_punch:
                     await self.field_friend.z_axis.return_to_reference()
+                    self.system.field_friend.z_axis.set_knife_safety(True)
 
             if self.drive_backwards_to_start:
                 self.log.info('Low battery, driving backwards to start...')
