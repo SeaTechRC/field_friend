@@ -236,7 +236,7 @@ class Weeding(rosys.persistence.PersistentModule):
                 rosys.notify('ChainAxis is not in top ref', 'negative')
                 self.log.error('ChainAxis is not in top ref')
                 return False
-        if not await self.system.puncher.try_home():
+        if not await self.system.puncher.try_home(set_knife_position=self.speed_tornado_punch):
             rosys.notify('Puncher homing failed, aborting', 'negative')
             self.log.error('Puncher homing failed, aborting')
             return False

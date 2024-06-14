@@ -23,7 +23,7 @@ class SetKnifeDialog(ui.dialog):
                 ui.button('Ok', on_click=lambda: self.submit('Ok'))
 
     async def turn_knifes(self):
-        self.field_friend.z_axis.turn_by(1/3.0)
+        await self.field_friend.z_axis.turn_by(1/3.0)
 
     def open(self) -> None:
         assert self.field_friend is not None

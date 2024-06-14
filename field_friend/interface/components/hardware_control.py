@@ -112,6 +112,7 @@ def hardware_control(field_friend: FieldFriend, automator: rosys.automation.Auto
             with ui.column():
                 ui.markdown('**Punch control**')
                 ui.button('Reference all', on_click=lambda: automator.start(puncher.try_home()))
+                ui.button('Reference all with knife pos', on_click=lambda: automator.start(puncher.try_home(set_knife_position=True)))
                 ui.button('clear view', on_click=lambda: automator.start(puncher.clear_view()))
                 if isinstance(field_friend.y_axis, ChainAxis):
                     ui.button('chop', on_click=lambda: automator.start(puncher.chop()))

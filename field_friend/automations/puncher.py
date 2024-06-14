@@ -181,7 +181,7 @@ class Puncher:
         try:
             if not self.field_friend.z_axis.is_referenced:
                 rosys.notify('axis are not referenced, homing!', type='info')
-                success = await self.try_home()
+                success = await self.try_home(set_knife_position=not (return_depth is None))
                 if not success:
                     rosys.notify('homing failed!', type='negative')
                     raise PuncherException('homing failed')
@@ -205,11 +205,11 @@ class Puncher:
 
             if return_depth is None:
                 await self.field_friend.z_axis.return_to_reference()
+                await rosys.sleep(0.5)
+                await self.field_friend.z_axis.turn_knifes_to(0)
+                await rosys.sleep(0.5)
             else:
                 await self.field_friend.z_axis.move_to(-return_depth)
-            await rosys.sleep(0.5)
-            await self.field_friend.z_axis.turn_knifes_to(0)
-            await rosys.sleep(0.5)
         except Exception as e:
             raise PuncherException(f'tornado drill failed because of: {e}') from e
         finally:
