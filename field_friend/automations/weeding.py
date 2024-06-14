@@ -499,8 +499,8 @@ class Weeding(rosys.persistence.PersistentModule):
 
                 # Lift z_axis before going to next segment
                 if self.speed_tornado_punch:
-                    await self.field_friend.z_axis.return_to_reference()
-                    self.system.field_friend.z_axis.set_knife_safety(True)
+                    await self.systemfield_friend.z_axis.return_to_reference()
+                    await self.system.field_friend.z_axis.set_knife_safety(True)
 
             if self.drive_backwards_to_start:
                 self.log.info('Low battery, driving backwards to start...')
