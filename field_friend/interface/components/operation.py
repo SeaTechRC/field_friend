@@ -123,8 +123,8 @@ class operation:
                                 ui.checkbox('Speedy tornado', value=False) \
                                     .bind_value(self.system.weeding, 'speed_tornado_punch') \
                                     .tooltip("Speed up punching by leaving the tornado in the ground during weeding.")
-                                ui.number('Tornado depth', format='%.0f', value=180, step=1, min=1, max=180) \
-                                    .props('dense outlined suffix=°') \
+                                ui.number('Tornado depth', format='%.4f', value=0.05, step=0.005, min=0, max=0.085) \
+                                    .props('dense outlined') \
                                     .classes('w-24') \
                                     .bind_value(self.system.weeding, 'punch_depth') \
                                     .tooltip('Set the depth for the tornado drill')
