@@ -300,6 +300,7 @@ class operation:
 
     async def set_knife_position(self):
         await self.set_knife_dialog
+        self.system.puncher.knife_position_set = 'set'
 
     def handle_automation_changed(self, e: events.ValueChangeEventArguments) -> None:
         self.system.automator.default_automation = self.system.automations[e.value]
