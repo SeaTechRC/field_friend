@@ -110,6 +110,8 @@ class Puncher:
                         return
                     self.log.info('punching was allowed')
                 await self.tornado_drill(angle=angle, turns=turns, with_open_drill=with_open_tornado, return_depth=return_depth)
+                if not (return_depth is None):
+                    await self.field_friend.y_axis.move_to(self.field_friend.y_axis.min_position)
 
             elif isinstance(self.field_friend.z_axis, ZAxis):
                 await self.field_friend.y_axis.move_to(y)
