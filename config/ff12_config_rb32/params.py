@@ -5,6 +5,6 @@ configuration = {
     'wheel_distance': 0.47,
     'work_x': -0.0075,
     'drill_radius': 0.025,
-    'antenna_offset': 0.205,
+    'antenna_offset': -(0.51/2),#0.205,
     'tool': 'tornado',
 }
