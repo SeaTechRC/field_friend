@@ -276,7 +276,7 @@ def status_dev_page(robot: FieldFriend, system: 'System'):
             temperature_label.text = f'{system.get_jetson_cpu_temperature()}°C'
 
         if hasattr(robot, 'status_control') and robot.status_control is not None:
-            status_control_label.text = f'RDYP: {robot.status_control.rdyp_status}, VDP: {robot.status_control.vdp_status}, heap: {robot.status_control.heap}'
+            status_control_label.text = f'RDYP: {robot.status_control.rdyp_status}, VDP: {robot.status_control.vdp_status}, heap: {robot.status_control.heap}, expander_last_message_age: {robot.status_control.expander_last_message_age}'
         direction_flag = '?' if system.gnss.current is None or system.gnss.current.heading is None else \
             'N' if system.gnss.current.heading <= 23 else \
             'NE' if system.gnss.current.heading <= 68 else \
