@@ -34,6 +34,7 @@ class RowsOnFieldNavigation(FollowCropsNavigation):
         self.state = self.State.APPROACHING_ROW_START
         self.field: Field | None = None
         self.row_index = 0
+        self.repeat_field = False
 
     async def prepare(self) -> bool:
         await super().prepare()
@@ -106,11 +107,12 @@ class RowsOnFieldNavigation(FollowCropsNavigation):
             self.driver.parameters.can_drive_backwards = False
             self.state = self.State.ROW_COMPLETED
         if self.state == self.State.ROW_COMPLETED:
-            if self.current_row == self.field.rows[-1]:
+            if self.current_row == self.field.rows[-1] and not self.repeat_field:
                 self.state = self.State.FIELD_COMPLETED
                 await rosys.sleep(0.1)  # wait for base class to finish navigation
             else:
                 self.row_index += 1
+                self.row_index %= len(self.field.rows)
                 self.state = self.State.APPROACHING_ROW_START
 
     def _should_finish(self) -> bool:
@@ -153,6 +155,7 @@ class RowsOnFieldNavigation(FollowCropsNavigation):
             .classes('w-32') \
             .tooltip('Select the field to work on')
         field_selection.bind_value_from(self, 'field', lambda f: f.id if f else None)
+        ui.checkbox("repeat field").bind_value(self, "repeat_field").tooltip("After finishing all rows, repeat the field.")
 
     def _set_field(self, field_id: str) -> None:
         field = self.field_provider.get_field(field_id)
