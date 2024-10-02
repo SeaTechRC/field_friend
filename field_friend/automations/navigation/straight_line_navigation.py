@@ -22,6 +22,7 @@ class StraightLineNavigation(Navigation):
         self.name = 'Straight Line'
         self.origin: rosys.geometry.Point
         self.target: rosys.geometry.Point
+        self.repeat_line = False
 
     async def prepare(self) -> bool:
         await super().prepare()
