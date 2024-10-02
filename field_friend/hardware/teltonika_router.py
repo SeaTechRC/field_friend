@@ -60,7 +60,7 @@ class TeltonikaRouter:
         last_connection = self.current_connection
         if up_connection == 'wan':
             self.current_connection = 'ether'
-        elif 'ifWan' in up_connection:
+        elif 'ifWan' in up_connection or "wifi1" in up_connection:
             self.current_connection = 'wifi'
         elif up_connection == 'mob1s1a1' or up_connection == 'mob1s2a1':
             self.current_connection = 'mobile'
