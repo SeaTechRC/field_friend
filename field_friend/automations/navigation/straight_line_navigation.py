@@ -39,14 +39,25 @@ class StraightLineNavigation(Navigation):
         self.target = self.odometer.prediction.transform(rosys.geometry.Point(x=self.length, y=0))
 
     async def _drive(self, distance: float) -> None:
-        start_position = self.odometer.prediction.point
-        closest_point = rosys.geometry.Line.from_points(self.origin, self.target).foot_point(start_position)
-        yaw = closest_point.direction(self.target)
-        await self._drive_towards_target(distance, rosys.geometry.Pose(x=closest_point.x, y=closest_point.y, yaw=yaw))
+        if not self._at_target():
+            start_position = self.odometer.prediction.point
+            closest_point = rosys.geometry.Line.from_points(self.origin, self.target).foot_point(start_position)
+            yaw = closest_point.direction(self.target)
+            await self._drive_towards_target(distance, rosys.geometry.Pose(x=closest_point.x, y=closest_point.y, yaw=yaw))
+        elif self.repeat:
+            await rosys.sleep(2)
+            self.plant_provider.clear()
+            if isinstance(self.implement, WeedingImplement):
+                self.implement.last_punches.clear()
+            await self.driver.drive_to(self.origin, backward = True)
+            await rosys.sleep(2)
 
-    def _should_finish(self) -> bool:
+    def _at_target(self) -> bool:
         end_pose = rosys.geometry.Pose(x=self.target.x, y=self.target.y, yaw=self.origin.direction(self.target), time=0)
         return end_pose.relative_point(self.odometer.prediction.point).x > 0
+
+    def _should_finish(self) -> bool:
+        return not self.repeat_line and self._at_target()
 
     def create_simulation(self):
         crop_distance = 0.2
@@ -70,6 +81,7 @@ class StraightLineNavigation(Navigation):
             .classes('w-24') \
             .bind_value(self, 'length') \
             .tooltip('Length to drive in meters')
+        ui.checkbox("repeat line").bind_value(self, "repeat_line").tooltip("Repeat this line forever (straight line navigation)")
 
     def backup(self) -> dict:
         return super().backup() | {
