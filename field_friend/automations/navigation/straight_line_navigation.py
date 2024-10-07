@@ -6,6 +6,7 @@ import rosys
 from nicegui import ui
 
 from ...automations.implements.implement import Implement
+from ...automations.implements.weeding_implement import WeedingImplement
 from .navigation import Navigation
 
 if TYPE_CHECKING:
@@ -45,7 +46,7 @@ class StraightLineNavigation(Navigation):
             closest_point = rosys.geometry.Line.from_points(self.origin, self.target).foot_point(start_position)
             yaw = closest_point.direction(self.target)
             await self._drive_towards_target(distance, rosys.geometry.Pose(x=closest_point.x, y=closest_point.y, yaw=yaw))
-        elif self.repeat:
+        elif self.repeat_line:
             await rosys.sleep(2)
             self.plant_provider.clear()
             if isinstance(self.implement, WeedingImplement):
