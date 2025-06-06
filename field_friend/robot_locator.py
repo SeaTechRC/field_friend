@@ -72,6 +72,15 @@ class RobotLocator(rosys.persistence.Persistable):
         )
 
     @property
+    def accuracy(self) -> Pose:
+        return Pose(
+            x=self._Sxx[0, 0],
+            y=self._Sxx[1, 1],
+            yaw=self._Sxx[2, 2],
+            time=self._pose_timestamp
+        )
+
+    @property
     def prediction(self) -> Pose:
         return self.pose
 

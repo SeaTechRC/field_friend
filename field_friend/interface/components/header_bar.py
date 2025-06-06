@@ -43,6 +43,16 @@ class HeaderBar:
             ui.button('Manual Steering', on_click=lambda system=system: manual_steerer_dialog(system)).tooltip(
                 'Open the manual steering window to move the robot with a joystick.')
 
+            async def enable_multi_ap(e):
+                await system.teltonika_router.set_multi_ap_enabled(True)
+                ui.notify('Enabled Multi-AP')
+            async def disable_multi_ap(e):
+                await system.teltonika_router.set_multi_ap_enabled(False)
+                ui.notify('Disabled Multi-AP')
+
+            ui.button('E-Multi', on_click=enable_multi_ap)
+            ui.button('D-Multi', on_click=disable_multi_ap)
+
             self.internet_status = ui.icon('wifi', size='sm')
             if system.is_real:
                 self._update_internet_status()

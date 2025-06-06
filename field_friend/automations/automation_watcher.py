@@ -4,6 +4,7 @@ import logging
 from copy import deepcopy
 from typing import TYPE_CHECKING
 
+import numpy as np
 import rosys
 from rosys.geometry import GeoPoint, Pose
 from rosys.hardware.gnss import GpsQuality
@@ -122,12 +123,18 @@ class AutomationWatcher:
         self.field_polygon = None
 
     def check_gnss(self) -> None:
+        pose_acc = self.robot_locator.accuracy
+        if pose_acc.x > 0.05 \
+            or pose_acc.y > 0.05 \
+            or pose_acc.yaw > np.deg2rad(5):
+            self.pause(f'Locator accuracy too low x±{pose_acc.x:.3f}m y±{pose_acc.y:.3f}m yaw±{np.rad2deg(pose_acc.yaw):.3f}°')
+        # TODO: use gps_quality here? or better robot locator uncertainty?
+        
         if not self.gnss_watch_active:
             return
-        if self.is_gnss_ready():
-            return
-        # TODO: use gps_quality here? or better robot locator uncertainty?
-        self.pause('GNSS failed')
+        if not self.is_gnss_ready():
+            self.pause('GNSS failed')
+        return
 
     def check_field_bounds(self) -> None:
         if not self.field_watch_active or not self.field_polygon:
