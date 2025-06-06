@@ -201,6 +201,16 @@ class PlantLocator(EntityLocator):
                 ui.button('Fetch detector info', on_click=self.fetch_detector_info)
             ui.label().bind_text_from(self, 'detector_info',
                                       backward=lambda info: f'Detector version: {info.current_version}/{info.target_version}' if info else 'Detector version: unknown')
+            
+            val = ui.input(label='Model select')
+            async def set_model():
+                nonlocal val
+                try:
+                    await self.detector.set_model_version(val.value)
+                    ui.notify(f'Set model to {val.value}', type='positive')
+                except Exception as model_e:
+                    ui.notify(f'Failed to set model: {model_e}', type='negative')
+            ui.button('Set model', on_click=set_model)
 
             @ui.refreshable
             def chips():

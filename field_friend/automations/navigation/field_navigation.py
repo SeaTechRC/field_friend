@@ -7,7 +7,7 @@ import numpy as np
 import rosys
 from nicegui import ui
 from rosys.analysis import track
-from rosys.geometry import Point
+from rosys.geometry import Point, Pose
 
 from ..field import Field, Row
 from ..implements.implement import Implement
@@ -32,6 +32,7 @@ class State(Enum):
 class FieldNavigation(StraightLineNavigation):
     MAX_DISTANCE_DEVIATION = 0.05
     MAX_ANGLE_DEVIATION = np.deg2rad(10.0)
+    DEFAULT_SMOOTH_TURN_RADIUS = 1.5
 
     def __init__(self, system: 'System', implement: Implement) -> None:
         super().__init__(system, implement)
@@ -55,6 +56,8 @@ class FieldNavigation(StraightLineNavigation):
         self.field_id: str | None = self.field_provider.selected_field.id if self.field_provider.selected_field else None
         self.field_provider.FIELD_SELECTED.register(self._set_field_id)
         self._loop: bool = False
+        self._smooth_turn: bool = False
+        self._smooth_turn_radius: float = FieldNavigation.DEFAULT_SMOOTH_TURN_RADIUS
         self.rows_to_work_on: list[Row] = []
 
     @property
@@ -203,12 +206,62 @@ class FieldNavigation(StraightLineNavigation):
         return State.FOLLOW_ROW
 
     @track
-    async def _run_change_row(self) -> State:
+    async def _run_smooth_turn_change_row(self) -> State:
+        last_start_point = self.start_point
+        last_end_point = self.end_point
         self.set_start_and_end_points()
         assert self.start_point is not None
-        target_yaw = self.robot_locator.pose.direction(self.start_point)
-        await self.turn_to_yaw(target_yaw)
-        await self.drive_towards_target(rosys.geometry.Pose(x=self.start_point.x, y=self.start_point.y, yaw=target_yaw), target_heading=target_yaw)
+
+        # TODO: Improve for non-rectangular fields
+
+        # Make first turn
+        end_pose = rosys.geometry.Pose(x=last_end_point.x, y=last_end_point.y,
+                                yaw=last_start_point.direction(last_end_point), time=0)
+        t1_target_pose = end_pose + rosys.geometry.PoseStep(linear=self._smooth_turn_radius, angular=0, time=0)
+        t1_yaw = last_end_point.direction(self.start_point)
+        if last_end_point.distance(self.start_point) < 0.01:
+            t1_yaw = end_pose.yaw + np.pi/2
+        t1_target_pose.yaw = t1_yaw
+        t1_target_pose += rosys.geometry.PoseStep(linear=self._smooth_turn_radius, angular=0, time=0)
+        await self.driver.drive_spline(rosys.geometry.Spline.from_poses(end_pose, t1_target_pose))
+
+        # Find pose to start second turn
+        start_pose = rosys.geometry.Pose(x=self.start_point.x, y=self.start_point.y,
+                                yaw=self.start_point.direction(self.end_point), time=0)
+        t2_target_pose = start_pose + rosys.geometry.PoseStep(linear=-self._smooth_turn_radius, angular=0, time=0)
+        t2_target_pose.yaw = t1_yaw
+        t2_target_pose += rosys.geometry.PoseStep(linear=-self._smooth_turn_radius, angular=0, time=0)
+
+        # Drive straight segment
+        # Find out if we have to drive backwards
+        backwards = np.abs(t1_target_pose.relative_direction(t2_target_pose)) > (3.14/2) # Pi estimate, should be close to 0 or Pi
+        # Enable backwards driving for this step
+        can_drive_backwards = self.driver.parameters.can_drive_backwards
+        self.driver.parameters.can_drive_backwards = True
+        await self.driver.drive_to(target=t2_target_pose.point, backward=backwards)
+        self.driver.parameters.can_drive_backwards = can_drive_backwards
+
+        # Do second turn
+        await self.driver.drive_spline(rosys.geometry.Spline.from_poses(t2_target_pose, start_pose))
+
+        row_yaw = self.start_point.direction(self.end_point)
+        await self.turn_to_yaw(row_yaw)
+        if isinstance(self.detector, rosys.vision.DetectorSimulation) and not rosys.is_test:
+            self.create_simulation()
+        else:
+            self.plant_provider.clear()
+        self._set_cultivated_crop()
+        self.allowed_to_turn = False
+        return State.FOLLOW_ROW
+
+    @track
+    async def _run_on_spot_turn_change_row(self) -> State:
+        self.set_start_and_end_points()
+        assert self.start_point is not None
+        if self.robot_locator.pose.distance(self.start_point) > 0.1: # Only do if we are fare enough away
+            target_yaw = self.robot_locator.pose.direction(self.start_point)
+            await self.turn_to_yaw(target_yaw)
+            await self.drive_towards_target(rosys.geometry.Pose(x=self.start_point.x, y=self.start_point.y, yaw=target_yaw), target_heading=target_yaw)
         assert self.end_point is not None
         row_yaw = self.start_point.direction(self.end_point)
         await self.turn_to_yaw(row_yaw)
@@ -219,6 +272,13 @@ class FieldNavigation(StraightLineNavigation):
         self._set_cultivated_crop()
         self.allowed_to_turn = False
         return State.FOLLOW_ROW
+
+    @track
+    async def _run_change_row(self) -> State:
+        if self._smooth_turn:
+            return await self._run_smooth_turn_change_row()
+        else:
+            return await self._run_on_spot_turn_change_row()
 
     @track
     async def _run_follow_row(self) -> State:
@@ -311,6 +371,8 @@ class FieldNavigation(StraightLineNavigation):
         return super().backup_to_dict() | {
             'field_id': self.field.id if self.field else None,
             'loop': self._loop,
+            'smooth_turn': self._smooth_turn,
+            'smooth_turn_radius': self._smooth_turn_radius,
             'wait_distance': self.wait_distance,
             'force_first_row_start': self.force_first_row_start,
             'is_in_swarm': self.is_in_swarm,
@@ -321,6 +383,8 @@ class FieldNavigation(StraightLineNavigation):
         field_id = data.get('field_id', self.field_provider.fields[0].id if self.field_provider.fields else None)
         self.field = self.field_provider.get_field(field_id)
         self._loop = data.get('loop', False)
+        self._smooth_turn = data.get('smooth_turn', False)
+        self._smooth_turn_radius = data.get('smooth_turn_radius', self._smooth_turn_radius)
         self.force_first_row_start = data.get('force_first_row_start', self.force_first_row_start)
         self.wait_distance = data.get('wait_distance', self.wait_distance)
         self.is_in_swarm = data.get('is_in_swarm', self.is_in_swarm)
@@ -335,6 +399,8 @@ class FieldNavigation(StraightLineNavigation):
         ui.label('').bind_text_from(self, '_state', lambda state: f'State: {state.name}')
         ui.label('').bind_text_from(self, 'row_index', lambda row_index: f'Row Index: {row_index}')
         ui.checkbox('Loop', on_change=self.request_backup).bind_value(self, '_loop')
+        ui.checkbox('Smooth turn', on_change=self.request_backup).bind_value(self, '_smooth_turn')
+        ui.number('Smooth turn radius', step=0.1, min=0.0, max=5.0, format='%.1f', suffix='m', on_change=self.request_backup).bind_value(self, '_smooth_turn_radius')
         ui.checkbox('Force first row start', on_change=self.request_backup).bind_value(self, 'force_first_row_start')
         ui.checkbox('Is in swarm', on_change=self.request_backup).bind_value(self, 'is_in_swarm')
         ui.checkbox('Allowed to turn').bind_value(self, 'allowed_to_turn')
@@ -365,8 +431,9 @@ class FieldNavigation(StraightLineNavigation):
                 plant = rosys.vision.SimulatedObject(category_name=crop, position=p3d)
                 self.detector.simulated_objects.append(plant)
 
-                for _ in range(1, 7):
-                    p = self.start_point.polar(crop_distance * (i+1) + randint(-5, 5) * 0.01, self.start_point.direction(self.end_point)) \
-                        .polar(randint(-15, 15)*0.01, self.robot_locator.pose.yaw + np.pi/2)
-                    self.detector.simulated_objects.append(rosys.vision.SimulatedObject(category_name='weed',
-                                                                                        position=rosys.geometry.Point3d(x=p.x, y=p.y, z=0)))
+                if i%2 == 0:
+                    for _ in range(1, 7):
+                        p = self.start_point.polar(crop_distance * (i+1) + randint(-5, 5) * 0.01, self.start_point.direction(self.end_point)) \
+                            .polar(randint(-15, 15)*0.01, self.robot_locator.pose.yaw + np.pi/2)
+                        self.detector.simulated_objects.append(rosys.vision.SimulatedObject(category_name='weed',
+                                                                                            position=rosys.geometry.Point3d(x=p.x, y=p.y, z=0)))

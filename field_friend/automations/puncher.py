@@ -91,10 +91,14 @@ class Puncher:
                     raise PuncherException('y position out of range')
 
             if isinstance(self.field_friend.z_axis, Tornado):
+                if depth < 0 or depth > 0.02:
+                    rosys.notify('depth out of range', type='negative')
+                    raise PuncherException('depth out of range')
+
                 assert isinstance(self.field_friend.y_axis, Axis)
                 await rosys.run.retry(lambda y=y: self.field_friend.y_axis.move_to(y),  # type: ignore
                                       on_failed=self.field_friend.y_axis.recover)
-                await self.tornado_drill(angle=angle, turns=turns, with_open_drill=with_open_tornado)
+                await self.tornado_drill(angle=angle, depth=depth, turns=turns, with_open_drill=with_open_tornado)
 
             elif isinstance(self.field_friend.z_axis, Axis):
                 await self.field_friend.y_axis.move_to(y)
@@ -140,7 +144,7 @@ class Puncher:
         await self.field_friend.y_axis.stop()
 
     @track
-    async def tornado_drill(self, angle: float = 180, turns: float = 2, with_open_drill=False) -> None:
+    async def tornado_drill(self, angle: float = 180, depth: float = 0, turns: float = 2, with_open_drill=False) -> None:
         self.log.debug(f'Drilling with tornado at {angle}°...')
         if not isinstance(self.field_friend.z_axis, Tornado):
             raise PuncherException('tornado drill is only available for tornado axis')
@@ -152,23 +156,26 @@ class Puncher:
                     raise PuncherException('homing failed')
                 await rosys.sleep(0.5)
             await self.field_friend.z_axis.move_down_until_reference(min_position=-0.058 if self.is_demo else None)
+            if depth != 0:
+                await rosys.sleep(2)
+                await self.field_friend.z_axis.move_to(min(self.field_friend.z_axis.position_z + depth, 0))
 
             await self.field_friend.z_axis.turn_knifes_to(angle)
-            await rosys.sleep(2)
+            await rosys.sleep(0.2)
             await self.field_friend.z_axis.turn_by(turns)
-            await rosys.sleep(2)
+            await rosys.sleep(0.2)
 
             if with_open_drill:
                 self.log.debug('Drilling again with open drill...')
                 await self.field_friend.z_axis.turn_knifes_to(0)
-                await rosys.sleep(2)
+                await rosys.sleep(0.2)
                 await self.field_friend.z_axis.turn_by(turns)
-                await rosys.sleep(2)
+                await rosys.sleep(0.2)
 
             await self.field_friend.z_axis.return_to_reference()
-            await rosys.sleep(0.5)
+            await rosys.sleep(0.2)
             await self.field_friend.z_axis.turn_knifes_to(0)
-            await rosys.sleep(0.5)
+            await rosys.sleep(0.2)
         except Exception as e:
             raise PuncherException(f'tornado drill failed because of: {e}') from e
         finally:
