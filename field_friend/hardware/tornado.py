@@ -102,6 +102,14 @@ class TornadoHardware(Tornado, rosys.hardware.ModuleHardware):
                  can: rosys.hardware.CanHardware,
                  expander: rosys.hardware.ExpanderHardware | None,
                  ) -> None:
+
+        self._running_knife: bool = False
+        self._running_turn: bool = False
+        self._last_ref_motor: bool = False
+        self._last_ref_gear: bool = False
+        self._turn_knife_offset: float = 0.0
+        self._turn_offset: float = 0.0
+
         self.config = config
         self.expander = expander
         self.turn_error = 0
@@ -242,13 +250,29 @@ class TornadoHardware(Tornado, rosys.hardware.ModuleHardware):
             await super().turn_by(turns)
         except RuntimeError as e:
             raise Exception(e) from e
-        target = self.position_turn/360 + turns
-        while not target - 0.01 < self.position_turn/360 < target + 0.01:
-            await self.robot_brain.send(f'{self.config.name}_motor_turn.position({target});')
-            await rosys.sleep(0.5)
+        zero = self.position_turn/360
+        target = zero + turns
+        try:
+            self._running_turn = True
+            while not target - 0.01 < self.position_turn/360 < target + 0.01:
+                # Check if we have a corrected position given by the ref switch
+                if False and self._turn_offset:
+                    print("FIX TURN")
+                    # Fix target
+                    rev = int((self.position_turn/360) - zero)
+                    zero = ((self._turn_offset/360) - rev)
+                    # Only move in positive direction
+                    if target < zero + turns:
+                        target = zero + turns
+                    self._turn_offset = None
+                await self.robot_brain.send(f'{self.config.name}_motor_turn.position({target});')
+                await rosys.sleep(0.1)
+        finally:
+            self._running_turn = False
 
     @track
     async def turn_knifes_to(self, angle: float) -> None:
+        angle %= 360
         try:
             await super().turn_knifes_to(angle)
         except RuntimeError as e:
@@ -259,9 +283,21 @@ class TornadoHardware(Tornado, rosys.hardware.ModuleHardware):
         if target_angle < 0:
             target_angle = 360 - self.last_angle + angle
         target = (self.position_turn - target_angle)/360
-        while not target - 0.01 < self.position_turn/360 < target + 0.01:
-            await self.robot_brain.send(f'{self.config.name}_motor_turn.position({target});')
-            await rosys.sleep(0.5)
+        try:
+            self._running_knife = True
+            while not target - 0.01 < self.position_turn/360 < target + 0.01:
+                # Check if we have a corrected position given by the ref switch
+                if False and self._turn_knife_offset:
+                    print("FIX KNIFE")
+                    # Fix target
+                    # Only move in negative direction
+                    if target > (self._turn_knife_offset - target_angle)/360:
+                        target = (self._turn_knife_offset - target_angle)/360
+                    self._turn_knife_offset = None
+                await self.robot_brain.send(f'{self.config.name}_motor_turn.position({target});')
+                await rosys.sleep(0.1)
+        finally:
+            self._running_knife = False
         self.last_angle = angle
 
     @track
@@ -396,6 +432,16 @@ class TornadoHardware(Tornado, rosys.hardware.ModuleHardware):
         self.ref_knife_ground = words.pop(0) == 'true'
         self.position_z = float(words.pop(0))
         self.position_turn = float(words.pop(0)) * 360
+
+        # Only find position of ref if we have a rising edge on the reference switches
+        if self._running_turn and not self._last_ref_motor and self.ref_motor:
+            self._turn_offset = self.position_turn
+        if self._running_knife and not self._last_ref_gear and self.ref_gear:
+            self._turn_knife_offset = self.position_turn
+
+        self._last_ref_motor = self.ref_motor
+        self._last_ref_gear = self.ref_gear
+
         if self.config.odrive_version == 6:
             self.turn_error = int(words.pop(0))
             self.z_error = int(words.pop(0))
