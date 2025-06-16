@@ -42,8 +42,8 @@ class WeedingImplement(Implement):
         self.start_time: float | None = None
         self.last_pose: Pose | None = None
         self.driven_distance: float = 0.0
-        self.crops_to_handle: dict[str, Point3d] = {}
-        self.weeds_to_handle: dict[str, Point3d] = {}
+        self.crops_to_handle: dict[str, tuple[Point3d, Plant]] = {}
+        self.weeds_to_handle: dict[str, tuple[Point3d, Plant]] = {}
         self.last_punches: deque[Point3d] = deque(maxlen=5)
         self.next_punch_y_position: float = 0
 
@@ -132,31 +132,39 @@ class WeedingImplement(Implement):
 
     def _has_plants_to_handle(self) -> bool:
         relative_crop_positions = {
-            c.id: Point3d.from_point(self.system.robot_locator.pose.relative_point(c.position.projection()))
+            c.id: (Point3d.from_point(
+                    self.system.robot_locator.pose.relative_point(c.position.projection())
+                    if c.image_pose is None else
+                    c.image_pose.relative_point(c.position.projection())),
+                c)
             for c in self.system.plant_provider.get_relevant_crops(self.system.robot_locator.pose.point_3d())
             if self.cultivated_crop is None or c.type == self.cultivated_crop
         }
         upcoming_crop_positions = {
-            c: pos for c, pos in relative_crop_positions.items()
-            if self.system.field_friend.WORK_X - self.system.field_friend.DRILL_RADIUS < pos.x < 0.3
+            c: item for c, item in relative_crop_positions.items()
+            if self.system.field_friend.WORK_X - self.system.field_friend.DRILL_RADIUS < item[0].x < 0.3
         }
         # Sort the upcoming positions so nearest comes first
-        sorted_crops = dict(sorted(upcoming_crop_positions.items(), key=lambda item: item[1].x))
+        sorted_crops = dict(sorted(upcoming_crop_positions.items(), key=lambda item: item[1][0].x))
         self.crops_to_handle = sorted_crops
 
         relative_weed_positions = {
-            w.id: Point3d.from_point(self.system.robot_locator.pose.relative_point(w.position.projection()))
+            w.id: (Point3d.from_point(
+                    self.system.robot_locator.pose.relative_point(w.position.projection())
+                    if w.image_pose is None else
+                    w.image_pose.relative_point(w.position.projection())),
+                w)
             for w in self.system.plant_provider.get_relevant_weeds(self.system.robot_locator.pose.point_3d())
             if w.type in self.relevant_weeds
         }
         upcoming_weed_positions = {
             w: pos for w, pos in relative_weed_positions.items()
-            if self.system.field_friend.WORK_X - self.system.field_friend.DRILL_RADIUS < pos.x < 0.4
+            if self.system.field_friend.WORK_X - self.system.field_friend.DRILL_RADIUS < pos[0].x < 0.4
         }
 
         # keep crops safe by pushing weeds away so the implement does not accidentally hit a crop
-        for _, crop_position in sorted_crops.items():
-            for weed, weed_position in upcoming_weed_positions.items():
+        for _, (crop_position, crop) in sorted_crops.items():
+            for weed, (weed_position, w) in upcoming_weed_positions.items():
                 offset = self.system.field_friend.DRILL_RADIUS + \
                     self.crop_safety_distance - crop_position.distance(weed_position)
                 if offset > 0:
@@ -164,10 +172,10 @@ class WeedingImplement(Implement):
                     weed_position_2d = weed_position.projection()
                     crop_position_2d = crop_position.projection()
                     safe_weed_position_2d = weed_position_2d.polar(offset, crop_position_2d.direction(weed_position_2d))
-                    upcoming_weed_positions[weed] = Point3d.from_point(safe_weed_position_2d)
+                    upcoming_weed_positions[weed] = (Point3d.from_point(safe_weed_position_2d), w)
 
         # Sort the upcoming positions so nearest comes first
-        sorted_weeds = dict(sorted(upcoming_weed_positions.items(), key=lambda item: item[1].x))
+        sorted_weeds = dict(sorted(upcoming_weed_positions.items(), key=lambda item: item[1][0].x))
         self.weeds_to_handle = sorted_weeds
         return False
 

@@ -259,7 +259,7 @@ class CameraCard:
         plants_to_handle = self.system.current_implement.crops_to_handle \
             if isinstance(self.system.current_implement, TornadoImplement) else self.system.current_implement.weeds_to_handle
         svg = ''
-        for i, plant in enumerate(plants_to_handle.values()):
+        for i, (plant, _) in enumerate(plants_to_handle.values()):
             plant_3d = Point3d(x=plant.x, y=plant.y, z=0) \
                 .in_frame(self.robot_locator.pose_frame).resolve()
             plant_2d = self.camera.calibration.project_to_image(plant_3d)

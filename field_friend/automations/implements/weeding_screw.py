@@ -49,14 +49,15 @@ class WeedingScrew(WeedingImplement):
     async def get_move_target(self) -> Point | None:  # pylint: disable=unused-argument
         """Return the target position to drive to."""
         super()._has_plants_to_handle()
-        weeds_in_range = {weed_id: position for weed_id, position in self.weeds_to_handle.items()
-                          if self.system.field_friend.can_reach(position.projection())}
+        weeds_in_range = {weed_id: weed_info for weed_id, weed_info in self.weeds_to_handle.items()
+                          if self.system.field_friend.can_reach(weed_info[0].projection())}
         if not weeds_in_range:
             self.log.debug('No weeds in range')
             return None
         self.log.debug(f'Found {len(weeds_in_range)} weeds in range: {weeds_in_range}')
-        for next_weed_id, next_weed_position in weeds_in_range.items():
-            weed_world_position = self.system.robot_locator.pose.transform3d(next_weed_position)
+        for next_weed_id, (next_weed_position, weed) in weeds_in_range.items():
+            weed_pose = self.system.robot_locator.pose if weed.image_pose is None else weed.image_pose
+            weed_world_position = weed_pose.transform3d(next_weed_position)
             crops = self.system.plant_provider.get_relevant_crops(self.system.robot_locator.pose.point_3d())
             if self.cultivated_crop and not any(c.position.distance(weed_world_position) < self.max_crop_distance for c in crops):
                 self.log.debug('Skipping weed because it is to far from the cultivated crops')

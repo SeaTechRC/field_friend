@@ -36,6 +36,9 @@ class PlantLocator(EntityLocator):
         self.detector = system.detector
         self.plant_provider = system.plant_provider
         self.robot_locator = system.robot_locator
+        self.used_cameras = set()
+        self.image_poses = {}
+        self.robot_locator = system.robot_locator
         self.robot_id = system.robot_id
         self.detector_info: DetectorInfo | None = None
         self.tags: list[str] = []
@@ -58,6 +61,8 @@ class PlantLocator(EntityLocator):
         if self.camera_provider is None:
             self.log.warning('no camera provider configured, cant locate plants')
             return
+        else:
+            self.camera_provider.NEW_IMAGE.register(self._save_image_pose)
         assert self.detector is not None
         self.detector.NEW_DETECTIONS.register(lambda e: setattr(self, 'last_detection_time', rosys.time()))
         rosys.on_repeat(self._detect_plants, 0.01)  # as fast as possible, function will sleep if necessary
@@ -84,6 +89,11 @@ class PlantLocator(EntityLocator):
         self.upload_images = data.get('upload_images', self.upload_images)
         self.tags = data.get('tags', self.tags)
 
+    def _save_image_pose(self, image):
+        if not image.camera_id in self.used_cameras:
+            return
+        self.image_poses[image.id] = self.robot_locator.pose
+
     async def _detect_plants(self) -> None:
         if self.is_paused:
             await rosys.sleep(0.01)
@@ -101,6 +111,7 @@ class PlantLocator(EntityLocator):
         if not self.crop_category_names:
             self.log.warning('No crop categories defined')
             await self.fetch_detector_info()
+        self.used_cameras.add(camera.id)
         new_image = camera.latest_captured_image
         if new_image is None or new_image.detections:
             await rosys.sleep(0.01)
@@ -111,6 +122,14 @@ class PlantLocator(EntityLocator):
             await rosys.sleep(0.01 - (rosys.time() - t))
         if not new_image.detections:
             return
+
+        pose = None
+        if not new_image.id in self.image_poses:
+            self.log.warning('No robot pose for new image!')
+        else:
+            pose = self.image_poses[new_image.id]
+        # Free poses
+        self.image_poses.clear()
 
         for d in new_image.detections.points:
             if isinstance(self.detector, rosys.vision.DetectorSimulation):
@@ -138,7 +157,9 @@ class PlantLocator(EntityLocator):
                 continue
             plant = Plant(type=d.category_name,
                           detection_time=rosys.time(),
-                          detection_image=new_image)
+                          detection_image=new_image,
+                          image_pose = pose
+                          )
             plant.positions.append(world_point_3d)
             plant.confidences.append(d.confidence)
             if d.category_name in self.weed_category_names and d.confidence >= self.minimum_weed_confidence:

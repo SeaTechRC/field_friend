@@ -26,6 +26,8 @@ class WorkflowException(Exception):
 class Navigation(rosys.persistence.Persistable):
     LINEAR_SPEED_LIMIT: float = 0.13
     LINEAR_SPEED_MINIMUM: float = 0.01
+    THROTTLE_AT_END_DISTANCE: float = 0.05
+    THROTTLE_AT_END_MIN_SPEED: float = 0.1
 
     def __init__(self, system: System, implement: Implement) -> None:
         super().__init__()
@@ -41,6 +43,8 @@ class Navigation(rosys.persistence.Persistable):
         self.name = 'Unknown'
         self.start_position = self.robot_locator.pose.point
         self.linear_speed_limit = self.LINEAR_SPEED_LIMIT
+        self.throttle_at_end_distance = self.THROTTLE_AT_END_DISTANCE
+        self.throttle_at_end_min_speed = self.THROTTLE_AT_END_MIN_SPEED
 
     @property
     @abc.abstractmethod
@@ -155,7 +159,10 @@ class Navigation(rosys.persistence.Persistable):
             self.log.warning('%s is behind the robot at %s, skipping', adjusted_target, self.robot_locator.pose)
             return
         self.log.debug('Driving towards %s with adjusted %s from %s', target, adjusted_target, self.robot_locator.pose)
-        with self.driver.parameters.set(linear_speed_limit=self.linear_speed_limit):
+        with self.driver.parameters.set(
+            linear_speed_limit=self.linear_speed_limit,
+            throttle_at_end_distance=self.throttle_at_end_distance,
+            throttle_at_end_min_speed=self.throttle_at_end_min_speed):
             await self.driver.drive_to(adjusted_target)
 
     @track
@@ -200,6 +207,16 @@ class Navigation(rosys.persistence.Persistable):
             .classes('w-24') \
             .bind_value(self, 'linear_speed_limit') \
             .tooltip(f'Forward speed limit in m/s (default: {self.LINEAR_SPEED_LIMIT:.2f})')
+        ui.number('Stopping distance', step=0.01, min=0.01, max=0.2, format='%.2f', on_change=self.request_backup) \
+            .props('dense outlined') \
+            .classes('w-24') \
+            .bind_value(self, 'throttle_at_end_distance') \
+            .tooltip(f'Distance to start breaking (default: {self.THROTTLE_AT_END_DISTANCE:.2f})')
+        ui.number('Stopping min speed', step=0.01, min=0.01, max=1.0, format='%.2f', on_change=self.request_backup) \
+            .props('dense outlined') \
+            .classes('w-24') \
+            .bind_value(self, 'throttle_at_end_min_speed') \
+            .tooltip(f'Stopping min speed limit as factor (default: {self.THROTTLE_AT_END_MIN_SPEED:.2f})')
 
 
 def is_reference_valid(gnss: Gnss | None, *, max_distance: float = 5000.0) -> bool:
