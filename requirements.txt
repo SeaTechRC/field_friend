@@ -6,6 +6,6 @@ pillow
 prompt-toolkit # for lizard monitor
 pynmea2
 # rosys == v0.25.0
-rosys @ git+https://github.com/zauberzeug/rosys.git@32c56d3d57f3e2eb5d0ce72b14f36022fb55731d
+rosys @ git+https://github.com/zauberzeug/rosys.git@e45b88eba10c65942c3797e9b1833097db574d16
 shapely
 uvicorn == 0.28.1
