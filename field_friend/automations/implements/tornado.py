@@ -64,9 +64,8 @@ class Tornado(WeedingImplement):
         if len(self.crops_to_handle) == 0:
             self.log.debug('No crops to handle')
             return None
-        closest_crop_id, (closest_crop_position, crop) = next(iter(self.crops_to_handle.items()))
-        crop_pose = self.system.robot_locator.pose if crop.image_pose is None else crop.image_pose
-        closest_crop_world_position = crop_pose.transform3d(closest_crop_position)
+        closest_crop_id, closest_crop_position = next(iter(self.crops_to_handle.items()))
+        closest_crop_world_position = self.system.robot_locator.pose.transform3d(closest_crop_position)
         if any(p.distance(closest_crop_world_position) < self.field_friend.DRILL_RADIUS for p in self.last_punches):
             self.log.debug('Skipping crop because it was already punched')
             return None
@@ -78,7 +77,7 @@ class Tornado(WeedingImplement):
             return None
         tornado_outer_diameter = self.field_friend.tornado_diameters(self.tornado_angle)[1]
         if self.skip_if_no_weeds and \
-            not any(closest_crop_position.distance(weed_position) < tornado_outer_diameter for weed_id, (weed_position, _) in self.weeds_to_handle.items()):
+            not any(closest_crop_position.distance(weed_position) < tornado_outer_diameter for weed_id, weed_position in self.weeds_to_handle.items()):
             
             self.log.info('Skipping crop because there are no weeds in range next to it.')
             return None

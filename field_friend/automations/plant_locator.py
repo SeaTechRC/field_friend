@@ -36,8 +36,6 @@ class PlantLocator(EntityLocator):
         self.detector = system.detector
         self.plant_provider = system.plant_provider
         self.robot_locator = system.robot_locator
-        self.used_cameras = set()
-        self.image_poses = {}
         self.robot_locator = system.robot_locator
         self.robot_id = system.robot_id
         self.detector_info: DetectorInfo | None = None
@@ -61,8 +59,6 @@ class PlantLocator(EntityLocator):
         if self.camera_provider is None:
             self.log.warning('no camera provider configured, cant locate plants')
             return
-        else:
-            self.camera_provider.NEW_IMAGE.register(self._save_image_pose)
         assert self.detector is not None
         self.detector.NEW_DETECTIONS.register(lambda e: setattr(self, 'last_detection_time', rosys.time()))
         rosys.on_repeat(self._detect_plants, 0.01)  # as fast as possible, function will sleep if necessary
@@ -89,11 +85,6 @@ class PlantLocator(EntityLocator):
         self.upload_images = data.get('upload_images', self.upload_images)
         self.tags = data.get('tags', self.tags)
 
-    def _save_image_pose(self, image):
-        if not image.camera_id in self.used_cameras:
-            return
-        self.image_poses[image.id] = self.robot_locator.pose
-
     async def _detect_plants(self) -> None:
         if self.is_paused:
             await rosys.sleep(0.01)
@@ -111,7 +102,6 @@ class PlantLocator(EntityLocator):
         if not self.crop_category_names:
             self.log.warning('No crop categories defined')
             await self.fetch_detector_info()
-        self.used_cameras.add(camera.id)
         new_image = camera.latest_captured_image
         if new_image is None or new_image.detections:
             await rosys.sleep(0.01)
@@ -123,14 +113,6 @@ class PlantLocator(EntityLocator):
         if not new_image.detections:
             return
 
-        pose = None
-        if not new_image.id in self.image_poses:
-            self.log.warning('No robot pose for new image!')
-        else:
-            pose = self.image_poses[new_image.id]
-        # Free poses
-        self.image_poses.clear()
-
         for d in new_image.detections.points:
             if isinstance(self.detector, rosys.vision.DetectorSimulation):
                 # NOTE we drop detections at the edge of the vision because in reality they are blocked by the chassis
@@ -140,7 +122,7 @@ class PlantLocator(EntityLocator):
             image_point = rosys.geometry.Point(x=d.cx, y=d.cy)
             world_point_3d: rosys.geometry.Point3d | None = None
             if isinstance(camera, StereoCamera):
-                world_point_3d = camera.calibration.project_from_image(image_point)
+                world_point_3d = camera.calibration.project_from_image(image_point, frame=pose)
                 # TODO: 3d detection
                 # camera_point_3d: Point3d | None = await camera.get_point(
                 #     int(d.cx), int(d.cy))
@@ -151,14 +133,13 @@ class PlantLocator(EntityLocator):
                 #     'zedxmini').in_frame(self.robot_locator.pose_frame)
                 # world_point_3d = camera_point_3d.in_frame(camera.calibration.extrinsics).resolve()
             else:
-                world_point_3d = camera.calibration.project_from_image(image_point)
+                world_point_3d = camera.calibration.project_from_image(image_point, frame=new_image.pose)
             if world_point_3d is None:
                 self.log.error('Failed to generate world point from %s', image_point)
                 continue
             plant = Plant(type=d.category_name,
                           detection_time=rosys.time(),
                           detection_image=new_image,
-                          image_pose = pose
                           )
             plant.positions.append(world_point_3d)
             plant.confidences.append(d.confidence)

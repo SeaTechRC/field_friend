@@ -1,8 +1,11 @@
 from typing import Any, Self
 
+import numpy as np
 import rosys
 from rosys import persistence
-
+from rosys.geometry import Pose3d
+from rosys.vision import Image
+from rosys.vision.image_processing import get_image_size_from_bytes, process_jpeg_image, process_ndarray_image
 
 class CalibratableUsbCamera(rosys.vision.CalibratableCamera, rosys.vision.UsbCamera):
 
@@ -14,6 +17,30 @@ class CalibratableUsbCamera(rosys.vision.CalibratableCamera, rosys.vision.UsbCam
         super().__init__(**kwargs)
         self.focal_length = focal_length
         self.calibration = calibration
+
+    # TODO: Remove the need to overwrite this function?
+    async def _handle_new_image_data(self, image_data: np.ndarray | bytes, timestamp: float) -> None:
+        if not self.is_connected:
+            return None
+
+        assert self.device is not None
+
+        pose = Pose3d.zero().transform_with(self.calibration.extrinsics)
+
+        bytes_: bytes | None
+        if isinstance(image_data, np.ndarray):
+            bytes_ = await rosys.run.cpu_bound(process_ndarray_image, image_data, self.rotation, self.crop)
+        else:
+            bytes_ = image_data
+            if self.crop or self.rotation != ImageRotation.NONE:
+                bytes_ = await rosys.run.cpu_bound(process_jpeg_image, bytes_, self.rotation, self.crop)
+        if bytes_ is None:
+            return
+
+        final_image_resolution = get_image_size_from_bytes(bytes_)
+
+        image = Image(time=timestamp, camera_id=self.id, size=final_image_resolution, data=bytes_, pose=pose)
+        self._add_image(image)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:

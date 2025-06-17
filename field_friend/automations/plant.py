@@ -13,7 +13,6 @@ class Plant:
     detection_time: float
     confidences: deque[float] = field(default_factory=lambda: deque(maxlen=20))
     detection_image: Image | None = None
-    image_pose: Pose | None = None
 
     @property
     def position(self) -> Point3d:
