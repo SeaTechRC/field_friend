@@ -142,6 +142,7 @@ class WeedingImplement(Implement):
         }
         # Sort the upcoming positions so nearest comes first
         sorted_crops = dict(sorted(upcoming_crop_positions.items(), key=lambda item: item[1].x))
+        self.log.debug(f'crops to handle: {[self.system.plant_provider.get_plant_by_id(cid).positions for cid in sorted_crops]}')
         self.crops_to_handle = sorted_crops
 
         relative_weed_positions = {
