@@ -132,7 +132,7 @@ class WeedingImplement(Implement):
 
     def _has_plants_to_handle(self) -> bool:
         relative_crop_positions = {
-            c.id: Point3d.from_point(self.system.robot_locator.pose.relative_point(c.position.projection()))
+            c.id: Point3d.from_point(self.system.robot_locator.pose.relative_point(c.positions[-1].projection()))
             for c in self.system.plant_provider.get_relevant_crops(self.system.robot_locator.pose.point_3d())
             if self.cultivated_crop is None or c.type == self.cultivated_crop
         }
@@ -142,11 +142,10 @@ class WeedingImplement(Implement):
         }
         # Sort the upcoming positions so nearest comes first
         sorted_crops = dict(sorted(upcoming_crop_positions.items(), key=lambda item: item[1].x))
-        self.log.debug(f'crops to handle: {[self.system.plant_provider.get_plant_by_id(cid).positions for cid in sorted_crops]}')
         self.crops_to_handle = sorted_crops
 
         relative_weed_positions = {
-            w.id: Point3d.from_point(self.system.robot_locator.pose.relative_point(w.position.projection()))
+            w.id: Point3d.from_point(self.system.robot_locator.pose.relative_point(w.positions[-1].projection()))
             for w in self.system.plant_provider.get_relevant_weeds(self.system.robot_locator.pose.point_3d())
             if w.type in self.relevant_weeds
         }

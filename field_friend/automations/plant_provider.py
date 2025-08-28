@@ -3,7 +3,7 @@ from typing import Any
 import rosys
 from nicegui import ui
 from rosys.event import Event
-from rosys.geometry import Point3d
+from rosys.geometry import Point3d, Pose3d
 
 from .plant import Plant
 
@@ -16,11 +16,12 @@ PREDICT_CROP_POSITION = False
 PREDICTION_CONFIDENCE = 0.3
 
 
-def check_if_plant_exists(plant: Plant, plants: list[Plant], distance: float) -> bool:
+def check_if_plant_exists(plant: Plant, plants: list[Plant], distance: float, camera_pose: Pose3d | None = None) -> bool:
     for p in plants:
         if p.position.distance(plant.position) < distance and p.type == plant.type:
             p.confidences.append(plant.confidence)
             p.positions.append(plant.position)
+            p.camera_poses.append(camera_pose)
             p.detection_image = plant.detection_image
             p.detection_time = plant.detection_time
             return True
@@ -74,7 +75,12 @@ class PlantProvider(rosys.persistence.Persistable):
 
     def prune(self) -> None:
         weeds_max_age = 10.0
-        crops_max_age = 60.0 * 300.0
+        crops_max_age = 10.0 #60.0 * 300.0
+
+        crops_to_prune = [crop for crop in self.crops if crop.detection_time <= rosys.time() - crops_max_age]
+        for c in crops_to_prune:
+            print((c.id, c.camera_poses, c.positions, c.confidences))
+
         self.weeds[:] = [weed for weed in self.weeds if weed.detection_time > rosys.time() - weeds_max_age]
         self.crops[:] = [crop for crop in self.crops if crop.detection_time > rosys.time() - crops_max_age]
         self.PLANTS_CHANGED.emit()
@@ -85,8 +91,8 @@ class PlantProvider(rosys.persistence.Persistable):
                 return plant
         raise ValueError(f'Plant with ID {plant_id} not found')
 
-    async def add_weed(self, weed: Plant) -> None:
-        if check_if_plant_exists(weed, self.weeds, 0.02):
+    async def add_weed(self, weed: Plant, camera_pose: Pose3d | None = None) -> None:
+        if check_if_plant_exists(weed, self.weeds, 0.02, camera_pose = camera_pose):
             return
         self.weeds.append(weed)
         self.PLANTS_CHANGED.emit()
@@ -100,8 +106,8 @@ class PlantProvider(rosys.persistence.Persistable):
         self.weeds.clear()
         self.PLANTS_CHANGED.emit()
 
-    def add_crop(self, crop: Plant) -> None:
-        if check_if_plant_exists(crop, self.crops, self.match_distance):
+    def add_crop(self, crop: Plant, camera_pose: Pose3d | None = None) -> None:
+        if check_if_plant_exists(crop, self.crops, self.match_distance, camera_pose=camera_pose):
             return
         if self.predict_crop_position:
             self._add_crop_prediction(crop)
@@ -121,7 +127,7 @@ class PlantProvider(rosys.persistence.Persistable):
         self.clear_weeds()
         self.clear_crops()
 
-    def _add_crop_prediction(self, plant: Plant) -> None:
+    def _add_crop_prediction(self, plant: Plant) -> None: # TODO: FIX BROKEN
         sorted_crops = sorted(self.crops, key=lambda crop: crop.position.distance(plant.position))
         if len(sorted_crops) < 2:
             return

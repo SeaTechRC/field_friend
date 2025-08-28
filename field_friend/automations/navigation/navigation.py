@@ -64,6 +64,7 @@ class Navigation(rosys.persistence.Persistable):
             if not await self.implement.prepare():
                 self.log.error('Tool-Preparation failed')
                 return
+            await rosys.sleep(2)
             rosys.notify(f'Activating {self.implement.name}...')
             await self.implement.activate()
             self.start_position = self.robot_locator.pose.point

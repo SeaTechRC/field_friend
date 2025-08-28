@@ -25,7 +25,7 @@ class CalibratableUsbCamera(rosys.vision.CalibratableCamera, rosys.vision.UsbCam
 
         assert self.device is not None
 
-        pose = Pose3d.zero().transform_with(self.calibration.extrinsics)
+        pose = self.calibration.extrinsics.resolve()
 
         bytes_: bytes | None
         if isinstance(image_data, np.ndarray):

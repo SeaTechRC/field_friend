@@ -6,6 +6,7 @@ pillow
 prompt-toolkit # for lizard monitor
 pynmea2
 # rosys == v0.25.0
-rosys @ git+https://github.com/SeaTechRC/rosys.git@11a8b0870c9399a848fbc73c415fa2b65ac9143e
+rosys @ git+https://github.com/SeaTechRC/rosys.git@5fa2c5992f8f5d038b2124afcdafc5317107c448
 shapely
 uvicorn == 0.28.1
+requests

@@ -21,7 +21,7 @@ config = FieldFriendConfiguration(
     measurements=MeasurementsConfiguration(
         tooth_count=15,
         pitch=0.033,
-        work_x=0.04
+        work_x=0
     ),
     camera=CameraConfiguration(
         width=1280,
@@ -58,7 +58,7 @@ config = FieldFriendConfiguration(
         motor_on_expander=False,
         can_address=0x60,
         end_stops_inverted=True,
-        max_speed=450,
+        max_speed=300,
         reference_speed=40,
         steps_per_m=1_481_481.48,
         name='yaxis',

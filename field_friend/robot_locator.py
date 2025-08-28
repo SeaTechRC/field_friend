@@ -40,6 +40,8 @@ class RobotLocator(rosys.persistence.Persistable):
         self._r_odom_angular = self.R_ODOM_ANGULAR
         self._r_imu_angular = self.R_IMU_ANGULAR
         self._odometry_angular_weight = self.ODOMETRY_ANGULAR_WEIGHT
+        self._r_xy_gnss_fac = 1
+        self._r_theta_gnss_fac = 1
 
         self._previous_imu_measurement: ImuMeasurement | None = None
 
@@ -171,8 +173,8 @@ class RobotLocator(rosys.persistence.Persistable):
     def _get_local_pose_and_uncertainty(self, gnss_measurement: GnssMeasurement) -> tuple[Pose, float, float]:
         pose = gnss_measurement.pose.to_local()
         pose.yaw = self._x[2, 0] + rosys.helpers.angle(self._x[2, 0], pose.yaw)
-        r_xy = (gnss_measurement.latitude_std_dev + gnss_measurement.longitude_std_dev) / 2
-        r_theta = np.deg2rad(gnss_measurement.heading_std_dev)
+        r_xy = ((gnss_measurement.latitude_std_dev + gnss_measurement.longitude_std_dev) / 2) * self._r_xy_gnss_fac
+        r_theta = np.deg2rad(gnss_measurement.heading_std_dev) * self._r_theta_gnss_fac
         return pose, r_xy, r_theta
 
     def _update(self, *, z: np.ndarray, h: np.ndarray, H: np.ndarray, Q: np.ndarray) -> None:  # noqa: N803
@@ -246,6 +248,12 @@ class RobotLocator(rosys.persistence.Persistable):
                 with ui.column().classes('w-24 gap-0'):
                     ui.number(label='ω odom weight', min=0, step=0.01, format='%.3f', value=self._odometry_angular_weight, on_change=self.request_backup) \
                         .bind_value_to(self, '_odometry_angular_weight')
+                with ui.column().classes('w-24 gap-0'):
+                    ui.number(label='xy gnss weight', min=0, step=0.01, format='%.3f', value=self._r_xy_gnss_fac) \
+                        .bind_value_to(self, '_r_xy_gnss_fac')
+                with ui.column().classes('w-24 gap-0'):
+                    ui.number(label='ω gnss weight', min=0, step=0.01, format='%.3f', value=self._r_theta_gnss_fac) \
+                        .bind_value_to(self, '_r_theta_gnss_fac')
 
             ui.button('Reset', on_click=self._reset) \
                 .tooltip('Reset the position to the GNSS measurement or zero position if GNSS is not available or ignored.')

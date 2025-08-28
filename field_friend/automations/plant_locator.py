@@ -137,6 +137,10 @@ class PlantLocator(EntityLocator):
             if world_point_3d is None:
                 self.log.error('Failed to generate world point from %s', image_point)
                 continue
+            
+            # Calculate camera pose in world space
+            camera_pose = new_image.pose
+
             plant = Plant(type=d.category_name,
                           detection_time=rosys.time(),
                           detection_image=new_image,
@@ -144,9 +148,9 @@ class PlantLocator(EntityLocator):
             plant.positions.append(world_point_3d)
             plant.confidences.append(d.confidence)
             if d.category_name in self.weed_category_names and d.confidence >= self.minimum_weed_confidence:
-                await self.plant_provider.add_weed(plant)
+                await self.plant_provider.add_weed(plant, camera_pose=camera_pose)
             elif d.category_name in self.crop_category_names and d.confidence >= self.minimum_crop_confidence:
-                self.plant_provider.add_crop(plant)
+                self.plant_provider.add_crop(plant, camera_pose=camera_pose)
             elif d.category_name not in self.crop_category_names and d.category_name not in self.weed_category_names:
                 self.log.info(f'{d.category_name} not in categories')
 

@@ -34,8 +34,8 @@ class Tornado(WeedingImplement):
             self.last_punches.append(Point3d.from_point(punch_position))
             self.log.debug(f'Drilling crop at {punch_position} with angle {self.tornado_angle}°')
             open_drill = False
-            if self.drill_with_open_tornado:
-                open_drill = True
+            #if self.drill_with_open_tornado:
+            #    open_drill = True
             await self.system.puncher.punch(y=self.next_punch_y_position, angle=self.tornado_angle, depth=self.tornado_depth, turns=self.tornado_turns, with_open_tornado=open_drill)
             # TODO remove weeds from plant_provider
             if isinstance(self.system.detector, rosys.vision.DetectorSimulation):
