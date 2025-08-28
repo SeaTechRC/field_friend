@@ -140,7 +140,11 @@ class FieldNavigation(WaypointNavigation):
         assert self.field is not None
         if self._should_charge():
             no_more_rows = sum(1 for segment in self._upcoming_path if isinstance(segment, RowSegment)) == 0
-            await self._run_charging(stop_after_docking=no_more_rows)
+            await self._run_charging(stop_after_docking=False)
+        no_more_rows = sum(1 for segment in self._upcoming_path if isinstance(segment, RowSegment)) == 0
+        if no_more_rows:
+            self._upcoming_path = self.generate_path()
+            self.PATH_GENERATED.emit(self._upcoming_path)
         if self.field.charge_dock_pose is not None and self.has_waypoints and self.system.field_friend.bms.state.is_charging:
             await self.undock()
             while not isinstance(self.current_segment, RowSegment):
@@ -175,7 +179,7 @@ class FieldNavigation(WaypointNavigation):
             return False
         if self.force_charge:
             return True
-        return self.system.field_friend.bms.is_below_percent(self.BATTERY_CHARGE_PERCENTAGE)
+        return self.system.field_friend.bms.is_below_percent(self.battery_charge_percentage)
 
     @track
     async def _run_charging(self, *, stop_after_docking: bool = False) -> None:
@@ -192,7 +196,7 @@ class FieldNavigation(WaypointNavigation):
         await self.dock()
         if stop_after_docking:
             return
-        while self.system.field_friend.bms.is_below_percent(self.BATTERY_WORKING_PERCENTAGE) or self.force_charge:
+        while self.system.field_friend.bms.is_below_percent(self.battery_working_percentage) or self.force_charge:
             await rosys.sleep(1)
 
     def _find_closest_row_index(self, rows: list[Row]) -> int:
