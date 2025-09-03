@@ -33,6 +33,7 @@ class LowBandwidthPage:
                             .bind_visibility_from(self.system.field_friend.estop, 'is_soft_estop_active', value=True)
                         with ui.row():
                             rosys.automation.automation_controls(self.system.automator)
+                            ui.checkbox('Repeat automation').bind_value(self.system, '_repeat_automation')
                     with ui.column().bind_visibility_from(self.system.automator, 'is_running'):
                         ui.label('').bind_text_from(self.system.current_navigation,
                                                     '_state', lambda state: f'State: {state.name}')

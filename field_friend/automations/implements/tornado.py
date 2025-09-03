@@ -129,7 +129,7 @@ class Tornado(WeedingImplement):
 
     def settings_ui(self):
         super().settings_ui()
-        ui.number('Drill depth', format='%.2f', step=0.01, on_change=self.request_backup) \
+        ui.number('Drill depth', format='%.3f', step=0.001, on_change=self.request_backup) \
             .props('dense outlined suffix=m') \
             .classes('w-24') \
             .bind_value(self, 'drill_depth') \

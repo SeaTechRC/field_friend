@@ -32,6 +32,7 @@ class System(rosys.persistence.Persistable):
     def __init__(self, robot_id: str, *, use_acceleration: bool = False) -> None:
         super().__init__()
         self.robot_id = robot_id
+        self._repeat_automation = False
         assert self.robot_id != 'unknown'
         self.config = get_config(self.robot_id)
         rosys.hardware.SerialCommunication.search_paths.insert(0, '/dev/ttyTHS0')
@@ -92,6 +93,11 @@ class System(rosys.persistence.Persistable):
             on_interrupt=self.field_friend.stop,
             notify=False,
         )
+        async def repeater():
+            if self._repeat_automation:
+                await rosys.sleep(0.5)
+                self.automator.start()
+        self.automator.AUTOMATION_COMPLETED.register(repeater)
         self.plant_provider = PlantProvider().persistent()
         self.plant_locator: PlantLocator = PlantLocator(self).persistent()
         self.puncher: Puncher = Puncher(self.field_friend, self.driver)

@@ -141,10 +141,6 @@ class FieldNavigation(WaypointNavigation):
         if self._should_charge():
             no_more_rows = sum(1 for segment in self._upcoming_path if isinstance(segment, RowSegment)) == 0
             await self._run_charging(stop_after_docking=False)
-        no_more_rows = sum(1 for segment in self._upcoming_path if isinstance(segment, RowSegment)) == 0
-        if no_more_rows:
-            self._upcoming_path = self.generate_path()
-            self.PATH_GENERATED.emit(self._upcoming_path)
         if self.field.charge_dock_pose is not None and self.has_waypoints and self.system.field_friend.bms.state.is_charging:
             await self.undock()
             while not isinstance(self.current_segment, RowSegment):

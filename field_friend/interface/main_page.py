@@ -50,3 +50,5 @@ class MainPage:
                         ui.space()
                         with ui.row():
                             rosys.automation.automation_controls(self.system.automator)
+                            ui.checkbox('Repeat automation').bind_value(self.system, '_repeat_automation')
+''

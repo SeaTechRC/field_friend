@@ -66,6 +66,7 @@ class MonitorPage:
                 self.sights['right'] = ui.interactive_image('assets/field_friend.webp').classes('w-full')
                 with ui.row():
                     rosys.automation.automation_controls(self.automator)
+                    ui.checkbox('Repeat automation').bind_value(self.system, '_repeat_automation')
 
     def _circle_sight_text(self, position: str) -> None:
         ui.label(position).classes('w-full text-2xl text-bold text-center')
