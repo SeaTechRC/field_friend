@@ -20,6 +20,7 @@ def check_if_plant_exists(plant: Plant, plants: list[Plant], distance: float) ->
         if p.position.distance(plant.position) < distance and p.type == plant.type:
             p.confidences.append(plant.confidence)
             p.positions.append(plant.position)
+            p.all_positions.append(plant.position)
             p.detection_image = plant.detection_image
             p.detection_time = plant.detection_time
             return True
@@ -54,11 +55,15 @@ class PlantProvider(rosys.persistence.Persistable):
         crops_max_age = 60.0 * 300.0
         num_weeds_before = len(self.weeds)
         num_crops_before = len(self.crops)
-        self.weeds[:] = [weed for weed in self.weeds if weed.detection_time > rosys.time() - weeds_max_age]
-        self.crops[:] = [crop for crop in self.crops if crop.detection_time > rosys.time() - crops_max_age]
+        t = rosys.time()
+        rem_crops = [crop for crop in self.crops if crop.detection_time <= t - crops_max_age]
+        self.weeds[:] = [weed for weed in self.weeds if weed.detection_time > t - weeds_max_age]
+        self.crops[:] = [crop for crop in self.crops if crop.detection_time > t - crops_max_age]
         self.log.debug('Pruned %s weeds and %s crops',
                        num_weeds_before - len(self.weeds),
                        num_crops_before - len(self.crops))
+        for p in rem_crops:
+            print(p.id, p.type, p.all_positions)
         self.PLANTS_CHANGED.emit()
 
     def get_plant_by_id(self, plant_id: str) -> Plant:
